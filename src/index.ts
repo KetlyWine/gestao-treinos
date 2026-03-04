@@ -11,6 +11,8 @@ import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUI from "@fastify/swagger-ui";
 import { auth } from "./lib/auth.js";
 import fastifyCors from "@fastify/cors";
+import fastifyApiReference from "@scalar/fastify-api-reference";
+import { ur } from "zod/locales";
 
 const app = Fastify({
   logger: true,
@@ -42,13 +44,38 @@ await app.register(fastifySwagger, {
   // })
 });
 
-await app.register(fastifySwaggerUI, {
-  routePrefix: "/docs",
+await app.register(fastifyCors, {
+  origin: ["http://localhost:3030"],
+  credentials: true,
 });
 
-await app.register(fastifyCors, {
-  origin: ["http://localhost:3030"], 
-  credentials: true,
+await app.register(fastifyApiReference, {
+  routePrefix: "/docs",
+  configuration: {
+    sources: [
+      {
+        title: "Bootcamp Treinos API",
+        slug: "bootcamp-treinos-api",
+        url: "swagger.json",
+      },
+      {
+        title: "Auth API",
+        slug: "auth-api",
+        url: "/api/auth/open-api/generate-schema",
+      },
+    ],
+  },
+});
+
+app.withTypeProvider<ZodTypeProvider>().route({
+  method: "GET",
+  url: "/swagger.json",
+  schema: {
+    hide: true,
+  },
+  handler: async () => {
+    return app.swagger();
+  },
 });
 
 app.route({
@@ -75,7 +102,7 @@ app.route({
     try {
       // Construct request URL
       const url = new URL(request.url, `http://${request.headers.host}`);
-      
+
       // Convert Fastify headers to standard Headers object
       const headers = new Headers();
       Object.entries(request.headers).forEach(([key, value]) => {
@@ -95,12 +122,12 @@ app.route({
       reply.send(response.body ? await response.text() : null);
     } catch (error) {
       app.log.error(error);
-      reply.status(500).send({ 
+      reply.status(500).send({
         error: "Internal authentication error",
-        code: "AUTH_FAILURE"
+        code: "AUTH_FAILURE",
       });
     }
-  }
+  },
 });
 
 try {
