@@ -8,11 +8,9 @@ import {
 } from "fastify-type-provider-zod";
 import { z } from "zod";
 import fastifySwagger from "@fastify/swagger";
-import fastifySwaggerUI from "@fastify/swagger-ui";
 import { auth } from "./lib/auth.js";
 import fastifyCors from "@fastify/cors";
 import fastifyApiReference from "@scalar/fastify-api-reference";
-import { ur } from "zod/locales";
 
 const app = Fastify({
   logger: true,
@@ -36,12 +34,6 @@ await app.register(fastifySwagger, {
     ],
   },
   transform: jsonSchemaTransform,
-
-  // You can also create transform with custom skiplist of endpoints that should not be included in the specification:
-  //
-  // transform: createJsonSchemaTransform({
-  //   skipList: [ '/documentation/static/*' ]
-  // })
 });
 
 await app.register(fastifyCors, {
@@ -56,7 +48,7 @@ await app.register(fastifyApiReference, {
       {
         title: "Bootcamp Treinos API",
         slug: "bootcamp-treinos-api",
-        url: "swagger.json",
+        url: "/swagger.json",
       },
       {
         title: "Auth API",
