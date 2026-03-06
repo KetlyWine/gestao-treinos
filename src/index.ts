@@ -10,7 +10,11 @@ import { z } from "zod";
 import fastifySwagger from "@fastify/swagger";
 import { auth } from "./lib/auth.js";
 import fastifyCors from "@fastify/cors";
+import { fromNodeHeaders } from "better-auth/node";
 import fastifyApiReference from "@scalar/fastify-api-reference";
+import { WeekDay } from "./generated/prisma/enums.js";
+import { CreateWorkoutPlan } from "./usecases/CreateWorkoutPlan.js";
+import { NotFoundError } from "./errors/index.js";
 
 const app = Fastify({
   logger: true,
@@ -56,6 +60,107 @@ await app.register(fastifyApiReference, {
         url: "/api/auth/open-api/generate-schema",
       },
     ],
+  },
+});
+
+app.withTypeProvider<ZodTypeProvider>().route({
+  method: "POST",
+  url: "/workout-plans",
+  schema: {
+    body: z.object({
+      name: z.string().trim().min(1),
+      workoutDays: z.array(
+        z.object({
+          name: z.string().trim().min(1),
+          weekDay: z.enum(WeekDay),
+          isRest: z.boolean().default(false),
+          estimatedDurationInSeconds: z.number().min(1),
+          exercises: z.array(
+            z.object({
+              order: z.number().min(0),
+              name: z.string().trim().min(1),
+              sets: z.number().min(1),
+              reps: z.number().min(1),
+              restTimeInSeconds: z.number().min(1),
+            }),
+          ),
+        }),
+      ),
+    }),
+    response: {
+      201: z.object({
+        name: z.string().trim().min(1),
+        workoutDays: z.array(
+          z.object({
+            name: z.string().trim().min(1),
+            weekDay: z.enum(WeekDay),
+            isRest: z.boolean().default(false),
+            estimatedDurationInSeconds: z.number().min(1),
+            exercises: z.array(
+              z.object({
+                order: z.number().min(0),
+                name: z.string().trim().min(1),
+                sets: z.number().min(1),
+                reps: z.number().min(1),
+                restTimeInSeconds: z.number().min(1),
+              }),
+            ),
+          }),
+        ),
+      }),
+      400: z.object({
+        error: z.string(),
+        code: z.string(),
+      }),
+      401: z.object({
+        error: z.string(),
+        code: z.string(),
+      }),
+      404: z.object({
+        error: z.string(),
+        code: z.string(),
+      }),
+      500: z.object({
+        error: z.string(),
+        code: z.string(),
+      }),
+    },
+  },
+  handler: async (request, reply) => {
+    try {
+      const session = await auth.api.getSession({
+        headers: fromNodeHeaders(request.headers),
+      });
+
+      if (!session) {
+        return reply.status(401).send({
+          error: "Unauthorized",
+          code: "UNAUTHORIZED",
+        });
+      }
+
+      const createWorkoutPlan = new CreateWorkoutPlan();
+      const result = await createWorkoutPlan.execute({
+        userId: session.user.id,
+        name: request.body.name,
+        workoutDays: request.body.workoutDays,
+      });
+
+      return reply.status(201).send(result);
+    } catch (error) {
+      app.log.error(error);
+      if ( error instanceof NotFoundError) {
+        return reply.status(404).send({
+          error: error.message,
+          code: "NOT_FOUND_ERROR",
+        });
+      }
+
+      return reply.status(500).send({
+        error: "Internal server error",
+        code: "INTERNAL_SERVER_ERROR",
+      });
+    }
   },
 });
 
@@ -110,7 +215,7 @@ app.route({
       const response = await auth.handler(req);
       // Forward response to client
       reply.status(response.status);
-      response.headers.forEach((value, key) => reply.header(key, value));
+      response.headers.forEach((value: string, key: string) => reply.header(key, value));
       reply.send(response.body ? await response.text() : null);
     } catch (error) {
       app.log.error(error);
